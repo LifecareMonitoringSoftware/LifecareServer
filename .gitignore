@@ -18,3 +18,6 @@
 
 # Binary
 server
+
+# Exclude temorary debug files
+__debug_bin*

@@ -1,16 +1,27 @@
-// Copyright 2021 Google LLC
+// ### Server guiding rules:
+// - Keep server stateless. This is important for future redundancy and availability setups.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+// ### Code examples for technologies used by this class.
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+// Go language project template for Google Cloud Run:
+// https://github.com/GoogleCloudPlatform/cloud-run-microservice-template-go
 //
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// JWT authorization example:
+// https://raw.githubusercontent.com/go-chi/jwtauth/master/_example/main.go
+//
+// BCrypt Hashing example
+// https://medium.com/@jcox250/password-hash-salt-using-golang-b041dc94cb72
+//
+// Registration and Login example
+// https://github.com/xDinomode/Go-Signup-Login-Example-MySQL/blob/master/signup.go
+//
+// Firestore quickstart example
+// https://github.com/GoogleCloudPlatform/golang-samples/blob/main/firestore/firestore_quickstart/main.go
+// https://firebase.google.com/docs/firestore/data-model
+// https://firebase.google.com/docs/firestore/manage-data/add-data
+//
+// Twilio SMS
+// https://www.twilio.com/docs/messaging/tutorials/send-messages-with-messaging-services
 
 package main
 
@@ -23,90 +34,75 @@ import (
 	"os/signal"
 	"time"
 
-	"cloud.google.com/go/logging"
-	"example.com/micro/metadata"
-	"github.com/gorilla/mux"
-	"google.golang.org/api/option"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"example.com/micro/cloud_run"
+	"github.com/go-chi/jwtauth/v5"
+	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
-type App struct {
-	*http.Server
-	projectID string
-	log       *logging.Logger
-}
+// tokenConfig, This is our JWT token configuration.
+var tokenConfig *jwtauth.JWTAuth
 
 func main() {
+	// Set the server port.
 	ctx := context.Background()
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("listening on port %s", port)
-	projectID := os.Getenv("GOOGLE_CLOUD_PROJECT")
-	app, err := newApp(ctx, port, projectID)
-	if err != nil {
-		log.Fatalf("unable to initialize application: %v", err)
+
+	// Print some information about our environment to the log file.
+	log.Printf("projectId: '%v'", cloud_run.ProjectID())
+	log.Printf("isRunningOnCloudRun: '%v'", cloud_run.IsRunningOnCloudRun())
+	log.Printf("port: %v", port)
+
+	// Create our JSON Web Token (JWT) configuration.
+	// This should be done before initializing our server or router, so that the pointer is never nil.
+	tokenConfig = jwtauth.New("HS256", []byte("secret"), nil, jwt.WithAcceptableSkew(30*time.Second))
+
+	// Create our server struct.
+	var server = http.Server{
+		// Add some defaults, should be changed to suit your use case.
+		Addr:           ":" + port,
+		ReadTimeout:    2 * 60 * time.Second,
+		WriteTimeout:   2 * 60 * time.Second,
+		MaxHeaderBytes: 1 << 20, // This equals 1,048,576, aka 1 megabyte.
 	}
+
+	// Setup our request router.
+	server.Handler = createRouterAndRoutes()
+
+	// Start the server, asynchronously.
 	log.Println("starting HTTP server")
 	go func() {
-		if err := app.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Server closed: %v", err)
+		if listenError := server.ListenAndServe(); listenError != nil && listenError != http.ErrServerClosed {
+			log.Fatalf("server closed unexpectedly: %v", listenError)
 		}
 	}()
 
+	// Run any rest code here.
+	runTestCode()
+
 	// Listen for SIGINT to gracefully shutdown.
-	nctx, stop := signal.NotifyContext(ctx, os.Interrupt, os.Kill)
-	defer stop()
-	<-nctx.Done()
+	signalContext, stopFunction := signal.NotifyContext(ctx, os.Interrupt, os.Kill)
+	defer stopFunction()
+	<-signalContext.Done()
 	log.Println("shutdown initiated")
 
 	// Cloud Run gives apps 10 seconds to shutdown. See
 	// https://cloud.google.com/blog/topics/developers-practitioners/graceful-shutdowns-cloud-run-deep-dive
 	// for more details.
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-	app.Shutdown(ctx)
-	log.Println("shutdown")
+	ctx, cancelFunction := context.WithTimeout(ctx, 10*time.Second)
+	defer cancelFunction()
+	server.Shutdown(ctx)
+	log.Println("shutdown completed")
 }
 
-func newApp(ctx context.Context, port, projectID string) (*App, error) {
-	app := &App{
-		Server: &http.Server{
-			Addr: ":" + port,
-			// Add some defaults, should be changed to suit your use case.
-			ReadTimeout:    10 * time.Second,
-			WriteTimeout:   10 * time.Second,
-			MaxHeaderBytes: 1 << 20,
-		},
-	}
+func runTestCode() {
 
-	if projectID == "" {
-		projID, err := metadata.ProjectID()
-		if err != nil {
-			return nil, fmt.Errorf("unable to detect Project ID from GOOGLE_CLOUD_PROJECT or metadata server: %w", err)
-		}
-		projectID = projID
-	}
-	app.projectID = projectID
+	// TEST ONLY: Print a sample web token.
+	// For debugging/example purposes, we generate and print
+	// a sample jwt token with claims `user_id:123` here:
+	_, tokenString, _ := tokenConfig.Encode(map[string]interface{}{"user_id": 123})
+	fmt.Printf("DEBUG: a sample jwt is %s\n", tokenString)
 
-	client, err := logging.NewClient(ctx, fmt.Sprintf("projects/%s", app.projectID),
-		// We don't need to make any requests when logging to stderr.
-		option.WithoutAuthentication(),
-		option.WithGRPCDialOption(
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		))
-	if err != nil {
-		return nil, fmt.Errorf("unable to initialize logging client: %v", err)
-	}
-	app.log = client.Logger("test-log", logging.RedirectAsJSON(os.Stderr))
-
-	// Setup request router.
-	r := mux.NewRouter()
-	r.HandleFunc("/", app.Handler).
-		Methods("GET")
-	app.Server.Handler = r
-
-	return app, nil
 }

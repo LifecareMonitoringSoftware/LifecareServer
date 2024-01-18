@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Create Account - Lifecare Monitoring</title>
+</head>
+
+<body>
+    <h2>Create Account - Lifecare Monitoring</h2>
+    <p style="color:darkorange"> * This software is under beta testing. *</p>
+    <br/>
+    <form method="POST" action="/signup">
+        <table style="max-width:65%;">
+            <tr>
+                <td colspan="2">
+                    <p style="color:red; text-align:center"><big><b>
+                                {{.MessageToUser}}</b></big></p>
+                </td>
+            </tr>
+            <tr>
+                <td>First Name</td>
+                <td><input type="text" name="FirstName" value="{{.FirstName}}"></td>
+            </tr>
+            <tr>
+                <td>Last Name</td>
+                <td><input type="text" name="LastName" value="{{.LastName}}"></td>
+            </tr>
+            <tr>
+                <td>Phone</td>
+                <td><input type="text" name="Phone" value="{{.Phone}}"></td>
+            </tr>
+            <tr>
+                <td>Email</td>
+                <td><input type="text" name="Email" value="{{.Email}}"></td>
+            </tr>
+            <tr>
+                <td colspan="2">
+                    <br/>
+                    <input type="checkbox" id="MessagingConsent" name="MessagingConsent">
+                    <label for="MessagingConsent">I consent to receiving text messages and emails about my account and my monitoring services.</label>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2">
+                    <br/>
+                    <input type="checkbox" id="TermsAndConditions" name="TermsAndConditions">
+                    <label for="TermsAndConditions">I have read and agree to the <a target="_blank" href="/page/terms">Terms of Service</a>, and <a target="_blank" href="/page/privacy">Privacy Policy</a>.</label>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2">
+                    <br/>
+                    <input type="checkbox" id="Disclaimer"  name="Disclaimer">
+                    <label for="Disclaimer"> I have read and agree to the following statement. The goal of Lifecare Monitoring is to provide a helpful and high quality service. However, no system is totally reliable. This is not a medical product. I understand that the monitoring alerts and other services may sometimes be inaccurate, defective, interrupted, unavailable, or not arrive on time. The product is provided on an "AS&nbsp;IS" and "AS&nbsp;AVAILABLE" basis. Your use of the product is at your own discretion and risk, and you are solely responsible for any damage resulting from its use.</label>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2">
+                    <br />
+                    <input type="submit" value="Submit">
+                </td>
+            </tr>
+        </table>
+    </form>
+</body>
+
+</html>
